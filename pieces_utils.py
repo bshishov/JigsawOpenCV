@@ -123,8 +123,8 @@ def gen_piece(args):
         ((c, -s), (s, c))
     )
     polygon = np.matmul(polygon, rot_matrix)
-
-    return np.int0(polygon)
+    corners = np.matmul([p1, p2, p3, p4], rot_matrix)
+    return np.int0(polygon), corners
 
 
 def gen_piece_lite(args_lite):
