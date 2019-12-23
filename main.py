@@ -120,24 +120,6 @@ def find_corners(piece_contour):
     return np.float32(corners) - generated_offset + piece_center
 
 
-def find_corners4(piece_contour):
-    piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32))
-    piece_center = np.squeeze(np.mean(piece_contour, axis=0))
-
-    target_canvas = contour_at_canvas_center(piece_contour)
-
-    opt = Optimization(target_canvas)
-
-    with benchmark('Evolution'):
-        opt_res = differential_evolution(opt.minimize_lite,
-                                         bounds=[(-1, 1)] * NUM_PARAMS_LITE,
-                                         tol=0.08)
-
-    generated, corners = gen_piece_lite(opt_res.x)
-    generated_offset = np.squeeze(np.mean(generated, axis=0))
-    return np.float32(corners) - generated_offset + piece_center
-
-
 def find_piece_sides(piece_contour, debug=False):
     piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32))
     corners = find_corners(piece_contour)
