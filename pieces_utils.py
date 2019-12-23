@@ -144,50 +144,58 @@ def gen_piece_lite(args_lite):
 
     return gen_piece(args)
 
-def gen_piece_corner(args_lite):
-    """ Assuming all args in [-1, 1] range"""
-    args = np.zeros(NUM_PARAMS, dtype=np.float32)
-
-    # Size
-    args[0] = args_lite[0]
-    args[1] = args_lite[1]
-
-    # Rotation
-    args[2] = args_lite[2]
-
-    return gen_piece(args)
 
 def gen_piece_options(args_lite, options):
     args = np.zeros(NUM_PARAMS, dtype=np.float32)
-    next = 0
+    next_index = 0
     if 'size' in options:
         args[0] = args_lite[0]
         args[1] = args_lite[1]
-        next += 2
+        next_index += 2
 
     if 'rotation' in options:
-        args[2] = args_lite[next]
-        next += 1
+        args[2] = args_lite[next_index]
+        next_index += 1
 
     if 'corner_offset' in options:
         for i in range(0, 4, 2):
-            args[3+i:5+i] = args_lite[next+i:next+i+2]
-        next += 8
+            args[3+i:5+i] = args_lite[next_index+i:next_index+i+2]
+        next_index += 8
 
     if 'middle_offset' in options:
         for i in range(0, 4, 2):
-            args[11+i:13+i] = args_lite[next+i:next+i+2]
-        next += 8
+            args[11+i:13+i] = args_lite[next_index+i:next_index+i+2]
+        next_index += 8
 
     if 'radius' in options:
-        args[19:23] = args_lite[next:next+4]
-        next += 4
+        args[19:23] = args_lite[next_index:next_index+4]
+        next_index += 4
 
     if 'ellipse' in options:
-        args[23:27] = args_lite[next:next + 4]
+        args[23:27] = args_lite[next_index:next_index + 4]
+        next_index += 4
 
     if 'neck_heights' in options:
-        args[27:31] = args_lite[next:next+4]
-        next += 4
+        args[27:31] = args_lite[next_index:next_index+4]
+        next_index += 4
 
     return gen_piece(args)
+
+
+def get_options_number(options):
+    next_index = 0
+    if 'size' in options:
+        next_index += 2
+    if 'rotation' in options:
+        next_index += 1
+    if 'corner_offset' in options:
+        next_index += 8
+    if 'middle_offset' in options:
+        next_index += 8
+    if 'radius' in options:
+        next_index += 4
+    if 'ellipse' in options:
+        next_index += 4
+    if 'neck_heights' in options:
+        next_index += 4
+    return next_index
