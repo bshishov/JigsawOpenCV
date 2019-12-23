@@ -10,8 +10,8 @@ from utils import arrange4points, benchmark
 from cv_tools import MeanFrameOverTime, ColoredMarkerDetector, InversePerspective, PieceDetector
 
 # ['size', 'rotation', 'neck_heights', 'corner_offset', 'middle_offset', 'radius', 'ellipse']
-OPTIONS = ['size', 'rotation', 'neck_heights', 'middle_offset']
-VIS = 1
+OPTIONS = ['size', 'rotation', 'neck_heights']
+VIS = 0
 
 def contour_at_canvas_center(contour, canvas_size=(256, 256), dst=None):
     """ Draws contour at a center of a canvas """
