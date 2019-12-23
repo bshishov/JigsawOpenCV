@@ -120,6 +120,24 @@ def find_corners(piece_contour):
     return np.float32(corners) - generated_offset + piece_center
 
 
+def find_corners4(piece_contour):
+    piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32))
+    piece_center = np.squeeze(np.mean(piece_contour, axis=0))
+
+    target_canvas = contour_at_canvas_center(piece_contour)
+
+    opt = Optimization(target_canvas)
+
+    with benchmark('Evolution'):
+        opt_res = differential_evolution(opt.minimize_lite,
+                                         bounds=[(-1, 1)] * NUM_PARAMS_LITE,
+                                         tol=0.08)
+
+    generated, corners = gen_piece_lite(opt_res.x)
+    generated_offset = np.squeeze(np.mean(generated, axis=0))
+    return np.float32(corners) - generated_offset + piece_center
+
+
 def find_piece_sides(piece_contour, debug=False):
     piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32))
     corners = find_corners(piece_contour)
@@ -153,12 +171,7 @@ def find_piece_sides(piece_contour, debug=False):
     return sides
 
 
-def piece_generation_test(filename='sample_piece.png'):
-    wnd_name = 'Frame'
-    cv.namedWindow(wnd_name)
-    cv.namedWindow('align1')
-    cv.namedWindow('align2')
-
+def piece_sides_test(filename='sample_piece.png'):
     sample = cv.imread(filename)
 
     sample_hsv = cv.cvtColor(sample, cv.COLOR_BGR2HSV)
@@ -169,41 +182,10 @@ def piece_generation_test(filename='sample_piece.png'):
                                           method=cv.CHAIN_APPROX_SIMPLE)
     target_contour = contours[0]
     cv.imshow('Piece', contour_at_canvas_center(target_contour))
+    cv.waitKey(1)
     find_piece_sides(target_contour, debug=True)
 
-    while True:
-
-        pass
-
-        lite_args = opt_res.x
-
-        # Default bounds
-        bounds = np.zeros((NUM_PARAMS, 2), dtype=np.float32)
-        bounds[:, 0] = -1
-        bounds[:, 1] = +1
-
-        delta = 0.05
-
-        # Size
-        bounds[0] = [lite_args[0] - delta, lite_args[0] + delta]
-        bounds[1] = [lite_args[1] - delta, lite_args[1] + delta]
-
-        # Rotation
-        bounds[2] = [lite_args[2] - delta, lite_args[2] + delta]
-
-        # Radius constraints
-        bounds[27] = [lite_args[3] - delta, lite_args[3] + delta]
-        bounds[28] = [lite_args[4] - delta, lite_args[4] + delta]
-        bounds[29] = [lite_args[5] - delta, lite_args[5] + delta]
-        bounds[30] = [lite_args[6] - delta, lite_args[6] + delta]
-
-        with benchmark('Second pass'):
-            opt_res = differential_evolution(opt.minimize, bounds=list(bounds), tol=0.05)
-            #opt_res = differential_evolution(opt.minimize, bounds=[(-1, 1)] * 23)
-            polygon = gen_piece(opt_res.x)
-
-        cv.imshow('align1', contour_at_canvas_center(polygon))
-        cv.waitKey(0)
+    cv.destroyAllWindows()
 
 
 def detection():
@@ -244,7 +226,7 @@ def detection():
 
 
 def main():
-    piece_generation_test()
+    piece_sides_test()
     #detection()
 
 
