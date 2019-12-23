@@ -5,7 +5,7 @@ import numpy as np
 
 from scipy.optimize import differential_evolution, basinhopping, minimize
 
-from pieces_utils import gen_piece, gen_piece_lite, NUM_PARAMS, NUM_PARAMS_LITE
+from pieces_utils import gen_piece, gen_piece_lite, gen_piece_corner, NUM_PARAMS, NUM_PARAMS_LITE, NUM_PARAMS_CORNERS
 from utils import arrange4points, benchmark
 from cv_tools import MeanFrameOverTime, ColoredMarkerDetector, InversePerspective, PieceDetector
 
@@ -75,8 +75,16 @@ class Optimization:
     def minimize_lite(self, args) -> float:
         polygon, _ = gen_piece_lite(args)
         sample = contour_at_canvas_center(polygon)
-        #cv.imshow('align1', sample)
-        #cv.waitKey(1)
+        # cv.imshow('align1', sample)
+        # cv.waitKey(1)
+
+        return self.distance(self.normalize(sample), self.target)
+
+    def minimize_corner(self, args) -> float:
+        polygon, _ = gen_piece_corner(args)
+        sample = contour_at_canvas_center(polygon)
+        # cv.imshow('align1', sample)
+        # cv.waitKey(1)
 
         return self.distance(self.normalize(sample), self.target)
 
@@ -90,11 +98,18 @@ def find_corners(piece_contour):
     opt = Optimization(target_canvas)
 
     with benchmark('Evolution'):
+        """
         opt_res = differential_evolution(opt.minimize_lite,
                                          bounds=[(-1, 1)] * NUM_PARAMS_LITE,
                                          tol=0.08)
+        """
+        opt_res = differential_evolution(opt.minimize_corner,
+                                         bounds=[(-1, 1)] * NUM_PARAMS_CORNERS,
+                                         tol=0.01)
 
-    generated, corners = gen_piece_lite(opt_res.x)
+
+    # generated, corners = gen_piece_lite(opt_res.x)
+    generated, corners = gen_piece_corner(opt_res.x)
     generated_offset = np.squeeze(np.mean(generated, axis=0))
     return np.float32(corners) - generated_offset + piece_center
 
@@ -138,7 +153,7 @@ def piece_sides_test(filename='sample_piece.png'):
     sample_hsv = cv.cvtColor(sample, cv.COLOR_BGR2HSV)
     sample_in_range = cv.inRange(sample_hsv, (0, 0, 220), (10, 10, 255))
 
-    contours, hierarchy = cv.findContours(sample_in_range,
+    _, contours, _ = cv.findContours(sample_in_range,
                                           mode=cv.RETR_EXTERNAL,
                                           method=cv.CHAIN_APPROX_SIMPLE)
     target_contour = contours[0]
