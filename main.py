@@ -54,30 +54,23 @@ def resample(curve, samples=20):
 
 class Optimization:
     def __init__(self, target):
-        self.target = target
+        self.target = self.normalize(target)
 
-    def norm(self, img):
+    def normalize(self, img):
         img = np.float32(img)
         return img / np.max(img)
 
-    def dst1(self, i1, i2):
-        i1 = self.norm(i1)
-        i2 = self.norm(i2)
-
+    def distance(self, i1, i2):
         return np.sum(np.logical_xor(i1, i2)) / i1.size
-
         #return np.sqrt(np.sum((i1 - i2) ** 2)) / i1.size
-        #return np.sum(np.abs(i1 - i2))
-        #dist_manhattan = np.sum(np.abs(i1 - i2)) / i1.size
-        #return np.sqrt(np.sum((i1 - i2) ^ 2)) / i1.size
 
     def minimize(self, args) -> float:
-        polygon = gen_piece(args)
+        polygon, _ = gen_piece(args)
         sample = contour_at_canvas_center(polygon)
         cv.imshow('align1', sample)
         cv.waitKey(1)
 
-        return self.dst1(sample, self.target)
+        return self.distance(self.normalize(sample), self.target)
 
     def minimize_lite(self, args) -> float:
         polygon, _ = gen_piece_lite(args)
@@ -85,21 +78,7 @@ class Optimization:
         #cv.imshow('align1', sample)
         #cv.waitKey(1)
 
-        return self.dst1(sample, self.target)
-
-    def minimize_lite_kw(self, x, y, r1, r2, r3, r4, rot):
-        polygon = gen_piece_lite([
-            x, y, r1, r2, r3, r4, rot
-        ])
-        sample = contour_at_canvas_center(polygon)
-        cv.imshow('align1', sample)
-        cv.waitKey(1)
-
-        return 10.-self.dst1(sample, self.target)
-
-    def plot(self, args):
-        polygon = gen_piece(args)
-        cv.imshow('align1', contour_at_canvas_center(polygon))
+        return self.distance(self.normalize(sample), self.target)
 
 
 def find_corners(piece_contour):
