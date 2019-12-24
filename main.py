@@ -7,7 +7,7 @@ from scipy.optimize import differential_evolution, basinhopping, minimize
 
 from pieces_utils import gen_piece, gen_piece_lite, gen_piece_options, get_options_number, NUM_PARAMS, NUM_PARAMS_LITE, NUM_PARAMS_CORNERS
 from utils import benchmark, center_contour, iter_curve_sides, resample_curve, curve_corners
-from cv_tools import MeanFrameOverTime, ColoredMarkerDetector, InversePerspective, PieceDetector
+from cv_tools import MeanFrameOverTime, ColoredMarkerDetector, InversePerspective, PieceDetector, TrackbarControl
 
 # ['size', 'rotation', 'neck_heights', 'corner_offset', 'middle_offset', 'radius', 'ellipse']
 OPTIONS = ['size', 'rotation']
@@ -68,12 +68,7 @@ class Optimization:
         return self.distance(self.normalize(sample), self.target)
 
 
-def find_contour_corners(piece_contour):
-    piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32))
-    return curve_corners(piece_contour)
-
-
-def find_contour_corners_opt(piece_contour):
+def find_contour_corners_opt(piece_contour, tol=0.01):
     piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32))
     piece_center = np.squeeze(np.mean(piece_contour, axis=0))
 
@@ -81,34 +76,37 @@ def find_contour_corners_opt(piece_contour):
 
     opt = Optimization(target_canvas)
 
-    with benchmark('Evolution'):
-        opt_res = differential_evolution(opt.minimize_options,
-                                         bounds=[(-1, 1)] * get_options_number(OPTIONS),
-                                         tol=0.05)
+    opt_res = differential_evolution(opt.minimize_options,
+                                     bounds=[(-1, 1)] * get_options_number(OPTIONS),
+                                     tol=tol)
 
     generated, corners = gen_piece_options(opt_res.x, OPTIONS)
     generated_offset = np.squeeze(np.mean(generated, axis=0))
     return np.float32(corners) - generated_offset + piece_center
 
 
-def find_piece_sides(piece_contour, debug=False):
-    piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32)) * 6
-    with benchmark('Corners'):
-        corners = find_contour_corners(piece_contour)
-    sides = list(map(resample_curve, iter_curve_sides(piece_contour, corners)))
+def find_piece_sides(piece_contour,
+                     corner_threshold: float = 0.7 * np.pi,
+                     tol: float=0.01,
+                     samples: int = 20,
+                     dst=None):
+    if len(piece_contour) < 10:
+        return []
+
+    piece_contour = np.squeeze(np.asarray(piece_contour, dtype=np.float32))
+    #corners = find_contour_corners_opt(piece_contour, tol=tol)
+    corners = curve_corners(piece_contour, corner_threshold=corner_threshold)
+    if corners is None or len(corners) < 4:
+        return []
+    sides = [resample_curve(side, samples) for side in iter_curve_sides(piece_contour, corners)]
     #sides = list(iter_curve_sides(piece_contour, corners))
 
-    if debug:
-        w, h = 1024, 1024
-        canvas_center = np.float32((w, h)) * 0.5
-        piece_center = np.squeeze(np.mean(piece_contour, axis=0))
-        dst = np.zeros((w, h, 3), np.uint8)
-
+    if dst is not None:
         for corner in corners:
-            cv.drawMarker(dst, tuple(np.int0(corner + canvas_center - piece_center)), (255, 0, 0))
+            cv.drawMarker(dst, tuple(np.int0(corner)), (255, 0, 0))
 
         colors = [
-            (255, 255, 255),
+            (0, 0, 255),
             (0, 255, 0),
             (255, 255, 0),
             (255, 0, 0),
@@ -116,15 +114,10 @@ def find_piece_sides(piece_contour, debug=False):
         for side, color in zip(sides, colors):
             if side.shape[0] > 2:
                 cv.polylines(dst,
-                             #[np.int0(resample_curve(side) + np.float32([512, 512] - piece_center))],
-                             [np.int0(side + canvas_center - piece_center)],
+                             [np.int0(side)],
                              isClosed=False,
                              color=color,
-                             thickness=1)
-
-        cv.namedWindow('find_piece_sides')
-        cv.imshow('find_piece_sides', dst)
-        cv.waitKey(0)
+                             thickness=3)
 
     return sides
 
@@ -151,11 +144,43 @@ def piece_sides_test(filename='sample_piece.png'):
     cv.destroyAllWindows()
 
 
+class Solver:
+    def __init__(self, window_name):
+        self.window_name = window_name
+
+        self.samples = TrackbarControl('Side samples', min_val=4, max_val=200, value=20)
+        self.angle = TrackbarControl('Angle threshold', min_val=0, max_val=100, value=70)
+        self.tol = TrackbarControl('tol', min_val=0, max_val=100, value=70)
+
+        if self.window_name:
+            cv.namedWindow(self.window_name)
+
+            self.samples.setup(self.window_name)
+            self.angle.setup(self.window_name)
+            self.tol.setup(self.window_name)
+
+    def process(self, piece_curves, dst=None):
+        a = np.pi * self.angle.value / 100.0
+        tol = .001 + .5 * self.tol.value / 100.0
+
+        if dst is None:
+            dst = np.zeros((512, 512, 3), np.uint8)
+
+        for piece_curve in piece_curves:
+            find_piece_sides(piece_curve,
+                             samples=self.samples.value,
+                             corner_threshold=a,
+                             tol=tol,
+                             dst=dst)
+        cv.imshow(self.window_name, dst)
+
+
 def detection():
     denoiser = MeanFrameOverTime()
     markers_detector = ColoredMarkerDetector(window_name='Markers')
     perspective = InversePerspective(window_name='Perspective')
     pieces_detector = PieceDetector('Pieces')
+    solver = Solver('solver')
 
     cap = cv.VideoCapture(0, cv.CAP_DSHOW)
     if not cap.isOpened():
@@ -174,7 +199,8 @@ def detection():
             markers = markers_detector.find_markers(raw)
             # markers_detector.draw_markers(raw, markers)
             board = perspective.process(raw, markers)
-            pieces_detector.find_pieces(board)
+            piece_contours = pieces_detector.find_pieces(board)
+            solver.process(piece_contours)
 
             cv.imshow('Capture', raw)
 
@@ -189,8 +215,8 @@ def detection():
 
 
 def main():
-    piece_sides_test()
-    #detection()
+    #piece_sides_test()
+    detection()
 
 
 if __name__ == '__main__':

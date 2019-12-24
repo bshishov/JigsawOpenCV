@@ -91,13 +91,20 @@ def calc_angles(curve):
 
 
 def curve_corners(curve, num_corners=4, corner_threshold=0.7 * np.pi):
-    angles = np.abs(list(calc_angles(curve)))
-    curve = curve[angles < corner_threshold]
+    if len(curve) < num_corners * 2:
+        return []
 
     center = np.squeeze(np.mean(curve, axis=0))
-    distances = np.squeeze(np.sqrt(np.sum((curve - center) ** 2, axis=-1)))
+    angles = np.abs(list(calc_angles(curve)))
 
-    indices = np.argsort(distances)[-num_corners:]
+    # distances to center
+    d = np.squeeze(np.sqrt(np.sum((curve - center) ** 2, axis=-1)))
+    max_d = np.max(d)
+    d = d / max_d
+
+    loss = angles / np.pi + 1 - d
+
+    indices = np.argsort(loss)[:num_corners]
     return curve[indices]
 
 
